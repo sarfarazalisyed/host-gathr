@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gathr — Admin Dashboard</title>
+<link rel="stylesheet" href="design/colors_and_type.css" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" data-presets="env,react" src="add-event.jsx"></script>
+<style>
+  :root { --sidebar-w: 260px; }
+  html, body { background: #F7F7F9; font-family: var(--g-font-ui); color: var(--g-ink-900); }
+  body { margin: 0; }
+  * { box-sizing: border-box; }
+  .font-display { font-family: var(--g-font-display); }
+  .font-body { font-family: var(--g-font-body); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #D0D5DD; border-radius: 999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .icon-btn { transition: background 160ms var(--g-ease), transform 160ms var(--g-ease); }
+  .icon-btn:hover { background: var(--g-purple-50); }
+  .icon-btn:active { transform: translateY(1px); }
+  input:focus, select:focus, textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(145,103,242,.18); border-color: var(--g-purple-500) !important; }
+  .modal-backdrop { background: rgba(15, 12, 30, 0.45); backdrop-filter: blur(4px); }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .modal-pop { animation: modalIn 220ms var(--g-ease-out); }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .fade-in { animation: fadeIn 180ms var(--g-ease); }
+  .tab-active { background: #fff; box-shadow: 0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.04); color: var(--g-ink-900); border: 1px solid var(--g-line-2); }
+  .tab-inactive { color: var(--g-ink-500); background: transparent; border: 1px solid transparent; }
+  .tab-inactive:hover { color: var(--g-ink-900); background: rgba(255,255,255,.6); }
+  .nav-active { background: var(--g-purple-500); color: #fff !important; }
+  .nav-active svg { stroke: #fff; }
+  .nav-item { transition: background 160ms var(--g-ease), color 160ms var(--g-ease); }
+  .nav-item:hover:not(.nav-active) { background: var(--g-purple-50); color: var(--g-ink-900); }
+  .row-hover:hover { background: var(--g-bg-lavender-soft); }
+  .qr-pattern { background-image:
+    linear-gradient(90deg, #1a1a1a 25%, transparent 25%, transparent 50%, #1a1a1a 50%, #1a1a1a 75%, transparent 75%),
+    linear-gradient(180deg, #1a1a1a 25%, transparent 25%, transparent 50%, #1a1a1a 50%, #1a1a1a 75%, transparent 75%);
+    background-size: 8px 8px;
+  }
+  /* Mobile sidebar drawer */
+  .mobile-overlay { background: rgba(15,12,30,.5); backdrop-filter: blur(2px); }
+  .tabs-scroll::-webkit-scrollbar { height: 0; display: none; }
+  .tabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  /* Hide non-essential table columns on small screens, render rows as cards */
+  @media (max-width: 767px) {
+    .events-table thead { display: none; }
+    .events-table, .events-table tbody, .events-table tr, .events-table td { display: block; width: 100%; }
+    .events-table tr { padding: 14px 16px; border-bottom: 1px solid var(--g-line-2); }
+    .events-table td { padding: 4px 0 !important; border: none !important; }
+    .events-table td.cell-actions { padding-top: 10px !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useMemo, useRef } = React;
+
+const Icon = ({ name, size = 20, className = "", strokeWidth = 1.75, color }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && window.lucide) {
+      ref.current.innerHTML = "";
+      const el = document.createElement("i");
+      el.setAttribute("data-lucide", name);
+      el.style.width = size + "px";
+      el.style.height = size + "px";
+      if (color) el.style.color = color;
+      ref.current.appendChild(el);
+      window.lucide.createIcons({ attrs: { "stroke-width": strokeWidth, width: size, height: size } });
+    }
+  }, [name, size, strokeWidth, color]);
+  return <span ref={ref} className={"inline-flex items-center justify-center " + className} style={{ width: size, height: size }} />;
+};
+window.GathrIcon = Icon;
+
+/* --------------- Seed data --------------- */
+const TODAY = new Date();
+const todayISO = TODAY.toISOString().slice(0, 10);
+const inDays = (d) => { const x = new Date(TODAY); x.setDate(x.getDate() + d); return x.toISOString().slice(0,10); };
+
+const SEED_EVENTS = [
+  { id: 1, name: "Karthik Live in Hyderabad", thumb: "K", thumbBg: "#3a2818", artist: "Karthik", artistColor: "#FFB070", date: inDays(28), time: "19:00", status: "upcoming", vertical: "nightclub", published: true, venue: "Phoenix Arena, Hyderabad", price: 1499 },
+  { id: 2, name: "HSR Flea Market — Summer Edition", thumb: "F", thumbBg: "#076B36", artist: "Bengaluru Flea Co.", artistColor: "#2BD37E", date: todayISO, time: "11:00", status: "today", vertical: "flea", published: true, venue: "HSR Layout Park, Bengaluru", price: 0 },
+  { id: 3, name: "Sunday Run Club — Marathon Prep", thumb: "R", thumbBg: "#9167F2", artist: "Mumbai Runners", artistColor: "#B9A0FB", date: inDays(7), time: "06:00", status: "upcoming", vertical: "meetup", published: true, venue: "Bandra Bandstand, Mumbai", price: 299 },
+  { id: 4, name: "Disco Nights at Kitty Su", thumb: "D", thumbBg: "#D4183D", artist: "DJ Nucleya", artistColor: "#FF8472", date: inDays(14), time: "22:00", status: "upcoming", vertical: "nightclub", published: true, venue: "Kitty Su, Delhi", price: 2499 },
+  { id: 5, name: "Supper Club: 6-Course Tasting", thumb: "S", thumbBg: "#BB5805", artist: "Chef Ananya R.", artistColor: "#FF9239", date: inDays(3), time: "19:30", status: "upcoming", vertical: "social", published: true, venue: "Private Loft, Koramangala", price: 3200 },
+  { id: 6, name: "Indie Concert: The Local Train", thumb: "I", thumbBg: "#1A1A1A", artist: "The Local Train", artistColor: "#9F7CF5", date: inDays(-7), time: "20:00", status: "past", vertical: "flea", published: true, venue: "Phoenix Marketcity, Pune", price: 1799 },
+  { id: 7, name: "Bengaluru Book Swap", thumb: "B", thumbBg: "#076B36", artist: "Cubbon Reads", artistColor: "#2BD37E", date: inDays(-21), time: "10:00", status: "past", vertical: "meetup", published: true, venue: "Cubbon Park, Bengaluru", price: 0 },
+  { id: 8, name: "Yoga & Brunch Pop-up", thumb: "Y", thumbBg: "#FF9239", artist: "Wellness HQ", artistColor: "#FFB070", date: inDays(10), time: "08:30", status: "upcoming", vertical: "social", published: false, venue: "TBD", price: 0 },
+  { id: 9, name: "New Year's Eve Bash 2027", thumb: "N", thumbBg: "#9167F2", artist: "TBA", artistColor: "#B9A0FB", date: inDays(45), time: "21:00", status: "upcoming", vertical: "nightclub", published: false, venue: "TBD", price: 0 },
+  { id: 10, name: "Comedy Open Mic", thumb: "C", thumbBg: "#FD634F", artist: "Aakash Mehta", artistColor: "#FF8472", date: todayISO, time: "20:30", status: "today", vertical: "social", published: true, venue: "The Habitat, Mumbai", price: 499 },
+];
+
+const VERTICAL_OPTIONS = [
+  { value: "nightclub", label: "Nightclubs & Live Shows", color: "#FD634F" },
+  { value: "flea", label: "Flea Markets & Concerts", color: "#00BB59" },
+  { value: "social", label: "Social Clubs", color: "#FF9239" },
+  { value: "meetup", label: "Community Meetups", color: "#9167F2" },
+];
+
+const STATUS_TABS = [
+  { key: "published", label: "All Published Events" },
+  { key: "today", label: "Today's Events" },
+  { key: "all", label: "All Events" },
+  { key: "upcoming", label: "Upcoming Events" },
+  { key: "past", label: "Past Events" },
+  { key: "drafts", label: "Drafts" },
+];
+
+const NAV_ITEMS = [
+  { key: "events", label: "Events", icon: "home", active: true },
+  { key: "venues", label: "Venues", icon: "building-2" },
+  { key: "artists", label: "Artists/Event Hosts", icon: "star" },
+  { key: "forms", label: "Forms", icon: "file-text" },
+  { key: "people", label: "People", icon: "users" },
+  { key: "ticketing", label: "Offline Ticketing", icon: "indian-rupee" },
+  { key: "tickets-status", label: "Offline Tickets Status", icon: "circle-dollar-sign" },
+  { key: "tables", label: "Table Management", icon: "armchair" },
+  { key: "cashier", label: "Cashier", icon: "wallet" },
+  { key: "history", label: "History", icon: "clock" },
+  { key: "issue", label: "Issue Cover", icon: "ticket" },
+  { key: "redeem", label: "Redeem Cover", icon: "ticket-check" },
+];
+
+/* --------------- Helpers --------------- */
+const fmtDate = (iso) => {
+  const [y,m,d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+};
+const fmtTime = (t) => {
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hh = ((h + 11) % 12) + 1;
+  return `${String(hh).padStart(2,"0")}:${String(m).padStart(2,"0")} ${period}`;
+};
+const computeStatus = (ev) => {
+  if (!ev.published) return "draft";
+  if (ev.date === todayISO) return "today";
+  if (ev.date < todayISO) return "past";
+  return "upcoming";
+};
+const statusLabel = (s) => ({ upcoming: "Up Coming", today: "Today", past: "Past", draft: "Draft" }[s]);
+const statusColor = (s) => ({
+  upcoming: { bg: "#EDE5FF", fg: "#5634AE", dot: "#9167F2" },
+  today:    { bg: "#E8FBEF", fg: "#076B36", dot: "#00BB59" },
+  past:     { bg: "#F4F5F7", fg: "#666666", dot: "#868E96" },
+  draft:    { bg: "#FFE9D6", fg: "#BB5805", dot: "#FF9239" },
+}[s]);
+
+/* --------------- Sidebar --------------- */
+function Sidebar({ collapsed, onToggle, active, setActive, mobileOpen, onCloseMobile, isMobile }) {
+  const hidden = isMobile && !mobileOpen;
+  return (
+    <React.Fragment>
+      {isMobile && mobileOpen && (
+        <div className="fixed inset-0 z-30 mobile-overlay lg:hidden" onClick={onCloseMobile} />
+      )}
+    <aside
+      className="bg-white border-r flex flex-col fixed inset-y-0 z-40"
+      style={{
+        width: isMobile ? 280 : (collapsed ? 72 : 260),
+        borderColor: "var(--g-line-2)",
+        transition: "width 220ms var(--g-ease), left 240ms var(--g-ease)",
+        left: hidden ? -320 : 0,
+      }}
+    >
+      {/* Header / logo */}
+      <div className="flex items-center justify-between px-4 py-5" style={{ height: 88 }}>
+        {!collapsed && (
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "#1A1A1A" }}>
+              <span className="font-display font-black text-white text-sm tracking-tight">XO</span>
+            </div>
+            <div className="font-display font-black text-base tracking-tight">XORA</div>
+          </div>
+        )}
+        {collapsed && (
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center mx-auto" style={{ background: "#1A1A1A" }}>
+            <span className="font-display font-black text-white text-sm tracking-tight">XO</span>
+          </div>
+        )}
+        {!collapsed && (
+          <button onClick={onToggle} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" style={{ border: "1px solid var(--g-line-2)" }} aria-label="Collapse sidebar">
+            <Icon name="panel-left-close" size={18} />
+          </button>
+        )}
+      </div>
+
+      {collapsed && (
+        <button onClick={onToggle} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center mx-auto mb-2" style={{ border: "1px solid var(--g-line-2)" }} aria-label="Expand sidebar">
+          <Icon name="panel-left-open" size={18} />
+        </button>
+      )}
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        <ul className="space-y-1">
+          {NAV_ITEMS.map((item) => (
+            <li key={item.key}>
+              <button
+                onClick={() => setActive(item.key)}
+                className={`nav-item w-full flex items-center gap-3 rounded-xl text-left font-display font-medium ${active === item.key ? "nav-active" : ""}`}
+                style={{
+                  padding: collapsed ? "12px" : "12px 14px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  fontSize: 15,
+                  color: active === item.key ? "#fff" : "var(--g-ink-700)",
+                }}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon name={item.icon} size={20} strokeWidth={1.75} />
+                {!collapsed && <span className="truncate">{item.label}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      {/* Powered by */}
+      {!collapsed && (
+        <div className="px-4 pb-3 text-center">
+          <div className="text-[11px] tracking-wide font-body" style={{ color: "var(--g-ink-400)" }}>Powered By</div>
+          <div className="font-display font-bold text-sm mt-0.5 flex items-center justify-center gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2L13.5 9 21 8 14.5 12 18 19 12 15 6 19 9.5 12 3 8 10.5 9z" fill="#00BB59"/></svg>
+            <span style={{ color: "var(--g-ink-800)" }}>Brynk Labs</span>
+          </div>
+        </div>
+      )}
+
+      {/* User chip */}
+      <div className="border-t px-3 py-3" style={{ borderColor: "var(--g-line-2)" }}>
+        <div className={`flex items-center gap-3 ${collapsed ? "justify-center" : ""}`}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "var(--g-purple-100)", border: "2px solid var(--g-purple-200)" }}>
+            <Icon name="user" size={18} color="var(--g-purple-700)" />
+          </div>
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="font-display font-semibold text-sm truncate">Sarfaraz G…</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#9167F2"/><path d="M8 12l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </div>
+              <div className="font-body text-[11px] truncate" style={{ color: "var(--g-ink-500)" }}>sarfarazalisyed2001@gmail.com</div>
+            </div>
+          )}
+          {!collapsed && (
+            <button className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" style={{ border: "1px solid var(--g-line-2)" }} aria-label="Logout">
+              <Icon name="log-out" size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+    </aside>
+    </React.Fragment>
+  );
+}
+
+/* --------------- Top header --------------- */
+function TopHeader({ onOpenMobileNav }) {
+  return (
+    <div className="bg-white rounded-2xl px-4 sm:px-6 flex items-center justify-between" style={{ minHeight: 72, border: "1px solid var(--g-line-2)", boxShadow: "0 1px 2px rgba(16,24,40,.04)" }}>
+      <div className="flex items-center gap-3 min-w-0">
+        <button onClick={onOpenMobileNav} className="lg:hidden icon-btn w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style={{ border: "1px solid var(--g-line-2)" }} aria-label="Open menu">
+          <Icon name="menu" size={20} />
+        </button>
+        <h1 className="font-display font-bold text-xl sm:text-2xl lg:text-3xl tracking-tight truncate">Admin Dashboard</h1>
+      </div>
+      <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center" style={{ background: "var(--g-purple-100)", border: "2px solid var(--g-purple-200)" }}>
+            <Icon name="user" size={20} color="var(--g-purple-700)" />
+          </div>
+          <div className="leading-tight hidden sm:block">
+            <div className="flex items-center gap-1">
+              <span className="font-display font-bold text-base">Sarfaraz G…</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#9167F2"/><path d="M8 12l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>
+            <div className="font-body text-xs hidden md:block" style={{ color: "var(--g-ink-500)" }}>sarfarazalisyed2001@gmail.com</div>
+          </div>
+        </div>
+        <button className="icon-btn w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center" style={{ border: "1px solid var(--g-line-2)" }} aria-label="Logout">
+          <Icon name="log-out" size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* --------------- Status pill --------------- */
+function StatusPill({ status }) {
+  const c = statusColor(status);
+  return (
+    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-display font-medium text-sm" style={{ background: c.bg, color: c.fg }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.dot }} />
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+/* --------------- Event row --------------- */
+function EventRow({ event, onQR, onTicket, onDuplicate, onEdit, onDelete }) {
+  const s = computeStatus(event);
+  return (
+    <tr className="row-hover border-b" style={{ borderColor: "var(--g-line-2)" }}>
+      <td className="py-5 pl-6 pr-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 font-display font-black text-white text-lg" style={{ background: event.thumbBg }}>
+            {event.thumb}
+          </div>
+          <div className="min-w-0">
+            <div className="font-display font-semibold text-[15px] truncate">{event.name}</div>
+            <div className="font-body text-xs truncate" style={{ color: "var(--g-ink-500)" }}>{event.venue}</div>
+          </div>
+        </div>
+      </td>
+      <td className="py-5 px-4"><StatusPill status={s} /></td>
+      <td className="py-5 px-4">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-white text-sm flex-shrink-0" style={{ background: event.artistColor }}>
+            {event.artist.charAt(0)}
+          </div>
+          <span className="font-display font-medium text-sm">{event.artist}</span>
+        </div>
+      </td>
+      <td className="py-5 px-4">
+        <div className="font-display font-semibold text-sm">{fmtDate(event.date)}</div>
+        <div className="font-body text-xs mt-0.5" style={{ color: "var(--g-ink-500)" }}>{fmtTime(event.time)}</div>
+      </td>
+      <td className="py-5 pr-6 pl-4 cell-actions">
+        <div className="flex items-center gap-1 flex-wrap">
+          <button onClick={() => onQR(event)} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" title="QR Code"><Icon name="qr-code" size={18} /></button>
+          <button onClick={() => onTicket(event)} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" title="Tickets"><Icon name="ticket" size={18} /></button>
+          <button onClick={() => onDuplicate(event)} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" title="Duplicate"><Icon name="copy" size={18} /></button>
+          <button onClick={() => onEdit(event)} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" title="Edit"><Icon name="pencil" size={18} /></button>
+          <button onClick={() => onDelete(event)} className="icon-btn w-9 h-9 rounded-lg flex items-center justify-center" title="Delete"><Icon name="trash-2" size={18} color="#D4183D" /></button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/* --------------- Modal shell --------------- */
+function Modal({ open, onClose, children, width = 560 }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop fade-in" onClick={onClose}>
+      <div className="bg-white rounded-2xl modal-pop shadow-2xl w-full" style={{ maxWidth: width, maxHeight: "92vh", overflow: "auto" }} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+window.GathrModal = Modal;
+
+/* --------------- Event form modal --------------- */
+function EventFormModal({ open, onClose, onSave, initial }) {
+  const blank = { name: "", venue: "", artist: "", date: todayISO, time: "19:00", vertical: "nightclub", published: true, price: 0 };
+  const [form, setForm] = useState(blank);
+  useEffect(() => { setForm(initial ? { ...blank, ...initial } : blank); }, [initial, open]);
+  if (!open) return null;
+  const isEdit = !!initial;
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const submit = () => {
+    if (!form.name.trim()) return;
+    onSave(form);
+    onClose();
+  };
+  const vert = VERTICAL_OPTIONS.find((v) => v.value === form.vertical) || VERTICAL_OPTIONS[0];
+  return (
+    <Modal open={open} onClose={onClose} width={620}>
+      <div className="px-7 py-6 border-b flex items-center justify-between" style={{ borderColor: "var(--g-line-2)" }}>
+        <div>
+          <h2 className="font-display font-bold text-2xl tracking-tight">{isEdit ? "Edit Event" : "Add new event"}</h2>
+          <p className="font-body text-sm mt-1" style={{ color: "var(--g-ink-500)" }}>{isEdit ? "Update the details below." : "Fill in the basics — you can refine ticket types later."}</p>
+        </div>
+        <button onClick={onClose} className="icon-btn w-10 h-10 rounded-xl flex items-center justify-center" style={{ border: "1px solid var(--g-line-2)" }} aria-label="Close"><Icon name="x" size={18} /></button>
+      </div>
+      <div className="px-7 py-6 space-y-5">
+        <Field label="Event Name">
+          <input type="text" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Karthik Live in Hyderabad" className="w-full h-12 px-4 rounded-xl font-body text-[15px]" style={{ border: "1px solid var(--g-line-2)" }} />
+        </Field>
+        <Field label="Venue">
+          <input type="text" value={form.venue} onChange={(e) => set("venue", e.target.value)} placeholder="Phoenix Arena, Hyderabad" className="w-full h-12 px-4 rounded-xl font-body text-[15px]" style={{ border: "1px solid var(--g-line-2)" }} />
+        </Field>
+        <Field label="Artist / Host">
+          <input type="text" value={form.artist} onChange={(e) => set("artist", e.target.value)} placeholder="Karthik" className="w-full h-12 px-4 rounded-xl font-body text-[15px]" style={{ border: "1px solid var(--g-line-2)" }} />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Date">
+            <input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} className="w-full h-12 px-4 rounded-xl font-body text-[15px]" style={{ border: "1px solid var(--g-line-2)" }} />
+          </Field>
+          <Field label="Time">
+            <input type="time" value={form.time} onChange={(e) => set("time", e.target.value)} className="w-full h-12 px-4 rounded-xl font-body text-[15px]" style={{ border: "1px solid var(--g-line-2)" }} />
+          </Field>
+        </div>
+        <Field label="Vertical">
+          <div className="grid grid-cols-2 gap-2">
+            {VERTICAL_OPTIONS.map((v) => (
+              <button key={v.value} type="button" onClick={() => set("vertical", v.value)}
+                className="flex items-center gap-2 px-4 h-11 rounded-xl font-display font-medium text-sm text-left transition-all"
+                style={{
+                  border: form.vertical === v.value ? `1.5px solid ${v.color}` : "1px solid var(--g-line-2)",
+                  background: form.vertical === v.value ? v.color + "12" : "#fff",
+                }}>
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: v.color }} />
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Ticket Price (₹)">
+            <input type="number" value={form.price} onChange={(e) => set("price", Number(e.target.value))} className="w-full h-12 px-4 rounded-xl font-body text-[15px]" style={{ border: "1px solid var(--g-line-2)" }} />
+          </Field>
+          <Field label="Status">
+            <button type="button" onClick={() => set("published", !form.published)} className="w-full h-12 px-4 rounded-xl font-display font-medium text-sm flex items-center justify-between" style={{ border: "1px solid var(--g-line-2)" }}>
+              <span>{form.published ? "Published" : "Draft"}</span>
+              <span className="w-10 h-6 rounded-full relative transition-all" style={{ background: form.published ? "var(--g-purple-500)" : "var(--g-line-4)" }}>
+                <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all" style={{ left: form.published ? "calc(100% - 22px)" : "2px" }} />
+              </span>
+            </button>
+          </Field>
+        </div>
+      </div>
+      <div className="px-7 py-5 border-t flex items-center justify-end gap-3" style={{ borderColor: "var(--g-line-2)" }}>
+        <button onClick={onClose} className="g-btn g-btn--ghost">Cancel</button>
+        <button onClick={submit} className="g-btn g-btn--primary" style={{ background: vert.color, color: "#fff" }}>{isEdit ? "Save Changes" : "Create Event"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="block g-label mb-2" style={{ fontSize: 13, fontWeight: 600, color: "var(--g-ink-700)" }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+window.GathrField = Field;
+
+/* --------------- Info modals (QR, Ticket, Delete) --------------- */
+function QRModal({ event, onClose }) {
+  if (!event) return null;
+  return (
+    <Modal open={!!event} onClose={onClose} width={420}>
+      <div className="px-7 py-6 border-b flex items-center justify-between" style={{ borderColor: "var(--g-line-2)" }}>
+        <h2 className="font-display font-bold text-xl tracking-tight">Event check-in QR</h2>
+        <button onClick={onClose} className="icon-btn w-10 h-10 rounded-xl flex items-center justify-center" style={{ border: "1px solid var(--g-line-2)" }}><Icon name="x" size={18} /></button>
+      </div>
+      <div className="px-7 py-7 flex flex-col items-center">
+        <div className="w-56 h-56 rounded-2xl flex items-center justify-center p-4" style={{ background: "#FAFAFA", border: "1px solid var(--g-line-2)" }}>
+          <svg viewBox="0 0 100 100" width="100%" height="100%">
+            {Array.from({length: 100}).map((_, i) => {
+              const x = i % 10, y = Math.floor(i / 10);
+              const seed = (event.id * 31 + x * 7 + y * 13) % 7;
+              if (seed < 3) return <rect key={i} x={x*10} y={y*10} width="10" height="10" fill="#1A1A1A"/>;
+              return null;
+            })}
+            {/* Corner squares */}
+            {[[0,0],[7,0],[0,7]].map(([cx,cy],i) => (
+              <g key={i}>
+                <rect x={cx*10} y={cy*10} width="30" height="30" fill="#1A1A1A"/>
+                <rect x={cx*10+5} y={cy*10+5} width="20" height="20" fill="#fff"/>
+                <rect x={cx*10+10} y={cy*10+10} width="10" height="10" fill="#1A1A1A"/>
+              </g>
+            ))}
+          </svg>
+        </div>
+        <div className="font-display font-bold text-base mt-5 text-center">{event.name}</div>
+        <div className="font-body text-sm mt-1 text-center" style={{ color: "var(--g-ink-500)" }}>{fmtDate(event.date)} · {fmtTime(event.time)}</div>
+        <button className="g-btn g-btn--accent mt-5 w-full"><Icon name="download" size={16} color="#fff" /> Download QR</button>
+      </div>
+    </Modal>
+  );
+}
+
+function EventTicketsModal({ event, onClose }) {
+  if (!event) return null;
+  const vert = VERTICAL_OPTIONS.find(v => v.value === event.vertical) || VERTICAL_OPTIONS[0];
+  const sold = (event.id * 37) % 240 + 40;
+  const cap = 500;
+  return (
+    <Modal open={!!event} onClose={onClose} width={460}>
+      <div className="px-7 py-6 border-b flex items-center justify-between" style={{ borderColor: "var(--g-line-2)" }}>
+        <h2 className="font-display font-bold text-xl tracking-tight">Tickets</h2>
+        <button onClick={onClose} className="icon-btn w-10 h-10 rounded-xl flex items-center justify-center" style={{ border: "1px solid var(--g-line-2)" }}><Icon name="x" size={18} /></button>
+      </div>
+      <div className="px-7 py-6">
+        <div className="rounded-2xl p-5" style={{ background: vert.color + "12", border: `1.5px solid ${vert.color}` }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="font-body text-xs uppercase tracking-wider font-semibold" style={{ color: vert.color }}>General Admission</div>
+              <div className="font-display font-bold text-2xl mt-1.5 tracking-tight">{event.name}</div>
+              <div className="font-body text-sm mt-1" style={{ color: "var(--g-ink-600)" }}>{event.venue}</div>
+            </div>
+            <div className="text-right">
+              <div className="font-display font-black text-3xl tracking-tight" style={{ color: vert.color }}>₹{event.price || "—"}</div>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 flex items-end justify-between" style={{ borderTop: `1px dashed ${vert.color}55` }}>
+            <div>
+              <div className="font-body text-xs" style={{ color: "var(--g-ink-500)" }}>Date</div>
+              <div className="font-display font-semibold text-sm">{fmtDate(event.date)}</div>
+            </div>
+            <div>
+              <div className="font-body text-xs" style={{ color: "var(--g-ink-500)" }}>Time</div>
+              <div className="font-display font-semibold text-sm">{fmtTime(event.time)}</div>
+            </div>
+            <div className="text-right">
+              <div className="font-body text-xs" style={{ color: "var(--g-ink-500)" }}>Sold</div>
+              <div className="font-display font-semibold text-sm">{sold}/{cap}</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-5">
+          <div className="flex items-center justify-between text-xs font-body mb-1.5">
+            <span style={{ color: "var(--g-ink-500)" }}>Capacity</span>
+            <span style={{ color: "var(--g-ink-700)", fontWeight: 600 }}>{Math.round(sold/cap*100)}% sold</span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--g-line-2)" }}>
+            <div className="h-full rounded-full" style={{ width: `${sold/cap*100}%`, background: vert.color }} />
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function ConfirmDelete({ event, onClose, onConfirm }) {
+  if (!event) return null;
+  return (
+    <Modal open={!!event} onClose={onClose} width={420}>
+      <div className="px-7 py-7">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4" style={{ background: "#FFEEEA" }}>
+          <Icon name="alert-triangle" size={22} color="#D4183D" />
+        </div>
+        <h2 className="font-display font-bold text-xl tracking-tight">Delete this event?</h2>
+        <p className="font-body text-sm mt-2" style={{ color: "var(--g-ink-500)" }}>
+          <strong style={{ color: "var(--g-ink-900)" }}>{event.name}</strong> will be removed permanently. Attendees with tickets will be notified via WhatsApp.
+        </p>
+        <div className="flex items-center justify-end gap-3 mt-6">
+          <button onClick={onClose} className="g-btn g-btn--ghost">Cancel</button>
+          <button onClick={() => { onConfirm(event); onClose(); }} className="g-btn" style={{ background: "var(--g-danger-strong)", color: "#fff" }}>Delete Event</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/* --------------- App --------------- */
+function App({ events, setEvents, onOpenWizard, onOpenMobileNav }) {
+  const [tab, setTab] = useState("published");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [qrEvent, setQrEvent] = useState(null);
+  const [ticketEvent, setTicketEvent] = useState(null);
+  const [deleteEvent, setDeleteEvent] = useState(null);
+  const PER_PAGE = 5;
+
+  const filtered = useMemo(() => {
+    let list = events;
+    if (tab === "published") list = list.filter(e => e.published);
+    else if (tab === "today") list = list.filter(e => computeStatus(e) === "today");
+    else if (tab === "upcoming") list = list.filter(e => computeStatus(e) === "upcoming");
+    else if (tab === "past") list = list.filter(e => computeStatus(e) === "past");
+    else if (tab === "drafts") list = list.filter(e => !e.published);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(e => e.name.toLowerCase().includes(q) || e.artist.toLowerCase().includes(q));
+    }
+    return list;
+  }, [events, tab, search]);
+
+  useEffect(() => { setPage(1); }, [tab, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const paged = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const onDuplicate = (ev) => {
+    const id = Math.max(0, ...events.map(e => e.id)) + 1;
+    setEvents((evs) => [{ ...ev, id, name: ev.name + " (Copy)", published: false }, ...evs]);
+  };
+
+  const onDelete = (ev) => setEvents((evs) => evs.filter(e => e.id !== ev.id));
+
+  return (
+    <>
+      <TopHeader onOpenMobileNav={onOpenMobileNav} />
+
+        {/* Tabs + search + add */}
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4 lg:justify-between">
+          <div className="tabs-scroll flex items-center gap-1 p-1.5 rounded-2xl overflow-x-auto -mx-1 px-1" style={{ background: "#EDEEF1", border: "1px solid var(--g-line-2)" }}>
+            {STATUS_TABS.map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)}
+                className={`px-4 h-10 rounded-xl font-display font-medium text-[13.5px] transition-all whitespace-nowrap flex-shrink-0 ${tab === t.key ? "tab-active" : "tab-inactive"}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div className="relative flex-1 lg:flex-initial">
+              <Icon name="search" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search Events..."
+                className="h-12 w-full lg:w-72 pl-11 pr-4 rounded-2xl font-body text-sm bg-white"
+                style={{ border: "1px solid var(--g-line-2)" }}
+              />
+            </div>
+            <button onClick={() => onOpenWizard(null)} className="g-btn g-btn--primary g-btn--lg flex-shrink-0" style={{ height: 48, borderRadius: 16, paddingLeft: 18, paddingRight: 18 }}>
+              <Icon name="plus" size={18} color="#fff" /> <span className="hidden sm:inline">Add Event</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-2xl overflow-x-auto md:overflow-hidden" style={{ border: "1px solid var(--g-line-2)" }}>
+          <table className="w-full events-table">
+            <thead>
+              <tr className="border-b" style={{ borderColor: "var(--g-line-2)", background: "#FAFAFB" }}>
+                <th className="text-left py-4 pl-6 pr-4 font-display font-semibold text-xs uppercase tracking-wider" style={{ color: "var(--g-ink-500)" }}>Event</th>
+                <th className="text-left py-4 px-4 font-display font-semibold text-xs uppercase tracking-wider" style={{ color: "var(--g-ink-500)" }}>Event Status</th>
+                <th className="text-left py-4 px-4 font-display font-semibold text-xs uppercase tracking-wider" style={{ color: "var(--g-ink-500)" }}>Artist/Event Host</th>
+                <th className="text-left py-4 px-4 font-display font-semibold text-xs uppercase tracking-wider" style={{ color: "var(--g-ink-500)" }}>Date & Time</th>
+                <th className="text-left py-4 pr-6 pl-4 font-display font-semibold text-xs uppercase tracking-wider" style={{ color: "var(--g-ink-500)" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paged.length === 0 ? (
+                <tr><td colSpan="5" className="py-16 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "var(--g-bg-lavender)" }}>
+                      <Icon name="calendar-x" size={24} color="var(--g-purple-500)" />
+                    </div>
+                    <div className="font-display font-semibold text-base">No events found</div>
+                    <div className="font-body text-sm" style={{ color: "var(--g-ink-500)" }}>Try a different tab or search term.</div>
+                  </div>
+                </td></tr>
+              ) : (
+                paged.map((ev) => (
+                  <EventRow key={ev.id} event={ev}
+                    onQR={setQrEvent}
+                    onTicket={setTicketEvent}
+                    onDuplicate={onDuplicate}
+                    onEdit={(e) => onOpenWizard(e)}
+                    onDelete={setDeleteEvent}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {/* Pagination */}
+          <div className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" style={{ borderTop: "1px solid var(--g-line-2)" }}>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <select value={page} onChange={(e) => setPage(Number(e.target.value))} className="h-10 pl-4 pr-9 rounded-xl font-display font-medium text-sm bg-white appearance-none cursor-pointer" style={{ border: "1px solid var(--g-line-2)" }}>
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <option key={i} value={i + 1}>{i + 1} Page</option>
+                  ))}
+                </select>
+                <Icon name="chevron-down" size={16} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+              <div className="font-body text-sm" style={{ color: "var(--g-ink-500)" }}>of {totalPages}</div>
+              <div className="font-body text-xs ml-2" style={{ color: "var(--g-ink-400)" }}>· {filtered.length} {filtered.length === 1 ? "event" : "events"}</div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 h-10 rounded-xl font-display font-medium text-sm disabled:opacity-40" style={{ border: "1px solid var(--g-line-2)", background: "#fff" }}>Prev</button>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button key={i} onClick={() => setPage(i + 1)} className="w-10 h-10 rounded-xl font-display font-semibold text-sm" style={{
+                  background: page === i + 1 ? "var(--g-purple-100)" : "#fff",
+                  color: page === i + 1 ? "var(--g-purple-700)" : "var(--g-ink-700)",
+                  border: page === i + 1 ? "1px solid var(--g-purple-300)" : "1px solid var(--g-line-2)",
+                }}>{i + 1}</button>
+              ))}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 h-10 rounded-xl font-display font-medium text-sm disabled:opacity-40" style={{ border: "1px solid var(--g-line-2)", background: "#fff" }}>Next</button>
+            </div>
+          </div>
+        </div>
+      <QRModal event={qrEvent} onClose={() => setQrEvent(null)} />
+      <EventTicketsModal event={ticketEvent} onClose={() => setTicketEvent(null)} />
+      <ConfirmDelete event={deleteEvent} onClose={() => setDeleteEvent(null)} onConfirm={onDelete} />
+    </>
+  );
+}
+
+/* --------------- Root: list vs wizard, with persistent sidebar --------------- */
+function Root() {
+  const [events, setEvents] = useState(SEED_EVENTS);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeNav, setActiveNav] = useState("events");
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const fn = () => setIsMobile(mq.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
+  const AEW = window.AddEventWizard;
+
+  const saveEvent = (data, asDraft) => {
+    const published = asDraft ? false : (data.published ?? true);
+    const startDate = data.startDate || todayISO;
+    const startTime = data.startTime || "19:00";
+    const artistName = data.artists?.[0]?.name || "TBA";
+    const venueObj = data.venueId ? { v1: "Phoenix Arena, Hyderabad", v2: "Kitty Su, Delhi", v3: "The Habitat, Mumbai", v4: "Cubbon Park, Bengaluru", v5: "HSR Layout Park, Bengaluru", v6: "Private Loft, Koramangala", v7: "Phoenix Marketcity, Pune" }[data.venueId] : "TBD";
+    const price = data.bookingGroups?.[0]?.tickets?.[0]?.price || 0;
+    const verticalMap = { Music: "nightclub", "Food & Drink": "social", Workshop: "meetup", Community: "meetup" };
+    const vertical = verticalMap[data.genre] || "nightclub";
+    const vertColor = ({ nightclub: "#FD634F", flea: "#00BB59", social: "#FF9239", meetup: "#9167F2" })[vertical];
+    if (data.id) {
+      setEvents((evs) => evs.map(e => e.id === data.id ? { ...e, ...data, name: data.name, venue: venueObj, artist: artistName, date: startDate, time: startTime, price, published, vertical } : e));
+    } else {
+      const id = Math.max(0, ...events.map(e => e.id)) + 1;
+      setEvents((evs) => [{
+        ...data, id,
+        thumb: data.name.trim().charAt(0).toUpperCase() || "E",
+        thumbBg: vertColor, artistColor: vertColor,
+        name: data.name, venue: venueObj, artist: artistName,
+        date: startDate, time: startTime, price, published, vertical,
+      }, ...evs]);
+    }
+  };
+
+  return (
+    <div className="min-h-screen" style={{ background: "#F7F7F9" }}>
+      <Sidebar
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(c => !c)}
+        active={activeNav}
+        setActive={(k) => { setActiveNav(k); if (isMobile) setMobileNavOpen(false); }}
+        mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+        isMobile={isMobile}
+      />
+      <main style={{ marginLeft: isMobile ? 0 : (collapsed ? 72 : 260), transition: "margin-left 220ms var(--g-ease)", "--sidebar-w": (isMobile ? 0 : (collapsed ? 72 : 260)) + "px" }} className="p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-6">
+        {wizardOpen && AEW ? (
+          <AEW initialEvent={editing}
+            onOpenMobileNav={() => setMobileNavOpen(true)}
+            onCancel={() => { setWizardOpen(false); setEditing(null); }}
+            onSave={(d) => { saveEvent(d, false); setWizardOpen(false); setEditing(null); }}
+            onSaveDraft={(d) => { saveEvent(d, true); setWizardOpen(false); setEditing(null); }} />
+        ) : (
+          <App events={events} setEvents={setEvents}
+            onOpenMobileNav={() => setMobileNavOpen(true)}
+            onOpenWizard={(ev) => { setEditing(ev); setWizardOpen(true); }} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
+</script>
+</body>
+</html>
